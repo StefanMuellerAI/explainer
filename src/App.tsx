@@ -26,56 +26,57 @@ export default function App() {
   };
 
   return (
-    <div className="w-full h-full flex">
-      {/* Left toolbar */}
-      <div className="p-3 z-10">
-        <Toolbar
-          onToggleBackground={() =>
-            bgOpen ? openOne(null) : openOne('bg')
-          }
-          onToggleCursor={() =>
-            cursorOpen ? openOne(null) : openOne('cursor')
-          }
-          onTogglePresets={() =>
-            presetOpen ? openOne(null) : openOne('preset')
-          }
-        />
-      </div>
-
-      {/* Canvas area */}
-      <div ref={canvasContainerRef} className="flex-1 relative">
-        <Canvas />
-        {bgOpen && <BackgroundPicker onClose={() => openOne(null)} />}
-        {cursorOpen && (
-          <CursorSettingsPanel onClose={() => openOne(null)} />
-        )}
-        {presetOpen && <PresetPanel onClose={() => openOne(null)} />}
-        {tool === 'pen' && <PenSettings />}
-
-        {/* Zoom indicator */}
-        <div className="absolute bottom-3 left-3 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm">
-          {Math.round(viewport.scale * 100)}%
-        </div>
-      </div>
-
-      {/* Right property panel */}
-      {panelOpen && (
+    <>
+      <div className="w-full h-full flex">
+        {/* Left toolbar */}
         <div className="p-3 z-10">
-          <PropertyPanel />
+          <Toolbar
+            onToggleBackground={() =>
+              bgOpen ? openOne(null) : openOne('bg')
+            }
+            onToggleCursor={() =>
+              cursorOpen ? openOne(null) : openOne('cursor')
+            }
+            onTogglePresets={() =>
+              presetOpen ? openOne(null) : openOne('preset')
+            }
+          />
         </div>
-      )}
 
-      {/* Panel toggle — fixed so it stays reachable in both states */}
-      <button
-        onClick={() => setPanelOpen((v) => !v)}
-        title={panelOpen ? 'Panel ausblenden' : 'Panel einblenden'}
-        className="fixed top-3 z-40 bg-white border border-gray-200 rounded-lg w-8 h-8 flex items-center justify-center text-gray-600 hover:bg-gray-50 shadow-sm"
-        style={{ right: panelOpen ? 320 : 12 }}
-      >
-        {panelOpen ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-      </button>
+        {/* Canvas area – takes the full remaining width */}
+        <div ref={canvasContainerRef} className="flex-1 relative">
+          <Canvas />
+          {bgOpen && <BackgroundPicker onClose={() => openOne(null)} />}
+          {cursorOpen && (
+            <CursorSettingsPanel onClose={() => openOne(null)} />
+          )}
+          {presetOpen && <PresetPanel onClose={() => openOne(null)} />}
+          {tool === 'pen' && <PenSettings />}
+
+          {/* Zoom indicator */}
+          <div className="absolute bottom-3 left-3 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm">
+            {Math.round(viewport.scale * 100)}%
+          </div>
+        </div>
+      </div>
+
+      {/* Floating right column: toggle button + (optional) property panel */}
+      <div className="fixed top-3 right-3 z-40 flex flex-col items-end gap-2 pointer-events-none">
+        <button
+          onClick={() => setPanelOpen((v) => !v)}
+          title={panelOpen ? 'Panel ausblenden' : 'Panel einblenden'}
+          className="pointer-events-auto bg-white border border-gray-200 rounded-lg w-8 h-8 flex items-center justify-center text-gray-600 hover:bg-gray-50 shadow-sm"
+        >
+          {panelOpen ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
+        {panelOpen && (
+          <div className="pointer-events-auto">
+            <PropertyPanel />
+          </div>
+        )}
+      </div>
 
       <CustomCursor containerRef={canvasContainerRef} />
-    </div>
+    </>
   );
 }
