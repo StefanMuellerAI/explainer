@@ -199,6 +199,13 @@ export function Canvas() {
   // Paste images & text
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
+      try {
+        handlePaste(e);
+      } catch (err) {
+        console.error('Paste handler failed:', err);
+      }
+    };
+    const handlePaste = (e: ClipboardEvent) => {
       // Don't hijack pastes into editable inputs
       const target = e.target as HTMLElement | null;
       if (
@@ -282,9 +289,11 @@ export function Canvas() {
       // 2) Text paste
       const raw = e.clipboardData?.getData('text/plain');
       if (!raw) return;
-      const text = raw.trim();
+      // hard cap to keep rendering / serialization bounded
+      const safe = raw.length > 5000 ? raw.slice(0, 5000) : raw;
+      const text = safe.trim();
       if (!text) return;
-      const isUrl = /^https?:\/\/[^\s]+$/i.test(text);
+      const isUrl = /^https?:\/\/\S+$/i.test(text) && text.length < 2000;
       const finalText = isUrl ? `Quelle: ${text}` : text;
       const fontFamily = isUrl
         ? 'JetBrains Mono'
@@ -1380,7 +1389,7 @@ function TextNode({
 }) {
   const fontStyle =
     `${el.italic ? 'italic ' : ''}${el.bold ? '700' : 'normal'}`.trim();
-  const wrapWidth = el.width;
+  const wrapWidth = Math.max(20, el.width);
   const m = measureText(
     el.text,
     el.fontFamily,
@@ -1389,6 +1398,7 @@ function TextNode({
     el.italic,
     wrapWidth,
   );
+  const wrappedText = m.lines.join('\n');
   const w = m.width;
   const h = m.height;
   const intensity = el.effectIntensity ?? 0.5;
@@ -1396,14 +1406,14 @@ function TextNode({
   const offset = 3 + intensity * 12;
 
   const baseTextProps: any = {
-    text: el.text,
+    text: wrappedText,
     fontFamily: el.fontFamily,
     fontSize: el.fontSize,
     fontStyle,
     align: el.align,
     lineHeight: 1.25,
     width: wrapWidth,
-    wrap: 'word',
+    wrap: 'none',
   };
 
   const renderEffect = () => {
