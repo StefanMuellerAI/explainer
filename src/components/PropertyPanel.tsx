@@ -1,6 +1,7 @@
 import {
   useStore,
   FONT_FAMILIES,
+  PEN_PRESETS,
   type CanvasEl,
   type ShapeEl,
   type ArrowEl,
@@ -8,6 +9,8 @@ import {
   type FrameEl,
   type TextEl,
   type TextEffect,
+  type PenEl,
+  type PenKind,
 } from '../store';
 import { measureText } from '../lib/measureText';
 import type { CSSProperties } from 'react';
@@ -119,6 +122,7 @@ export function PropertyPanel() {
       {el.type === 'image' && <ImageFields el={el as ImageEl} />}
       {el.type === 'frame' && <FrameFields el={el as FrameEl} />}
       {el.type === 'text' && <TextFields el={el as TextEl} />}
+      {el.type === 'pen' && <PenFields el={el as PenEl} />}
     </aside>
   );
 }
@@ -134,7 +138,76 @@ function labelFor(t: string) {
     image: 'Bild',
     frame: 'Export-Rahmen',
     text: 'Text',
+    pen: 'Stift-Strich',
   }[t] ?? t;
+}
+
+function PenFields({ el }: { el: PenEl }) {
+  const update = useStore((s) => s.updateElement);
+  return (
+    <Section title="Stift">
+      <Row>
+        <div className="flex-1">
+          <label className="text-[10px] text-gray-500 block mb-0.5">Typ</label>
+          <select
+            value={el.penKind}
+            onChange={(e) =>
+              update(el.id, { penKind: e.target.value as PenKind } as any)
+            }
+            className="w-full text-xs border border-gray-300 rounded px-2 py-1"
+          >
+            {(Object.keys(PEN_PRESETS) as PenKind[]).map((k) => (
+              <option key={k} value={k}>
+                {PEN_PRESETS[k].label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </Row>
+      <Row>
+        <ColorInput
+          label="Farbe"
+          value={el.stroke}
+          onChange={(v) => update(el.id, { stroke: v } as any)}
+        />
+        <NumberInput
+          label="Spitze"
+          value={el.strokeWidth}
+          onChange={(v) =>
+            update(el.id, { strokeWidth: Math.max(0.5, v) } as any)
+          }
+        />
+      </Row>
+      <label className="text-[10px] text-gray-500 block mb-0.5">
+        Deckkraft: {Math.round(el.opacity * 100)}%
+      </label>
+      <input
+        type="range"
+        min={0.05}
+        max={1}
+        step={0.05}
+        value={el.opacity}
+        onChange={(e) =>
+          update(el.id, { opacity: Number(e.target.value) } as any)
+        }
+        className="w-full mb-2"
+      />
+      <label className="text-[10px] text-gray-500 block mb-0.5">
+        Glättung: {(el.tension ?? 0).toFixed(2)}
+      </label>
+      <input
+        type="range"
+        min={0}
+        max={1}
+        step={0.05}
+        value={el.tension ?? 0}
+        onChange={(e) =>
+          update(el.id, { tension: Number(e.target.value) } as any)
+        }
+        className="w-full"
+      />
+    </Section>
+  );
 }
 
 function isShape(el: CanvasEl): el is ShapeEl {

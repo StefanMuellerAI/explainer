@@ -4,12 +4,14 @@ import { Canvas } from './components/Canvas';
 import { Toolbar } from './components/Toolbar';
 import { PropertyPanel } from './components/PropertyPanel';
 import { BackgroundPicker } from './components/BackgroundPicker';
+import { PenSettings } from './components/PenSettings';
 import { useStore } from './store';
 
 export default function App() {
   const [bgOpen, setBgOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
   const viewport = useStore((s) => s.viewport);
+  const tool = useStore((s) => s.tool);
 
   return (
     <div className="w-full h-full flex">
@@ -22,6 +24,7 @@ export default function App() {
       <div className="flex-1 relative">
         <Canvas />
         {bgOpen && <BackgroundPicker onClose={() => setBgOpen(false)} />}
+        {tool === 'pen' && <PenSettings />}
 
         {/* Zoom indicator */}
         <div className="absolute bottom-3 left-3 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm">

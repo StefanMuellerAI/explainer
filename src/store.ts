@@ -10,9 +10,12 @@ export type Tool =
   | 'star'
   | 'arrow'
   | 'text'
+  | 'pen'
   | 'frame';
 
 export type ShapeType = 'rect' | 'ellipse' | 'triangle' | 'diamond' | 'star';
+
+export type PenKind = 'pen' | 'marker' | 'highlighter' | 'pencil';
 
 export type TextEffect =
   | 'none'
@@ -83,6 +86,17 @@ export interface FrameEl extends BaseEl {
   name: string;
 }
 
+export interface PenEl extends BaseEl {
+  type: 'pen';
+  // points in local coords relative to (x, y): [x1,y1,x2,y2,...]
+  points: number[];
+  stroke: string;
+  strokeWidth: number;
+  opacity: number;
+  penKind: PenKind;
+  tension: number;
+}
+
 export interface TextEl extends BaseEl {
   type: 'text';
   text: string;
@@ -98,7 +112,22 @@ export interface TextEl extends BaseEl {
   curveBend: number; // -1 .. 1, only used for curve effect
 }
 
-export type CanvasEl = ShapeEl | ImageEl | ArrowEl | FrameEl | TextEl;
+export type CanvasEl = ShapeEl | ImageEl | ArrowEl | FrameEl | TextEl | PenEl;
+
+export const PEN_PRESETS: Record<
+  PenKind,
+  { color: string; width: number; opacity: number; label: string }
+> = {
+  pen: { color: '#111827', width: 4, opacity: 1, label: 'Stift' },
+  marker: { color: '#111827', width: 10, opacity: 0.95, label: 'Filzstift' },
+  highlighter: {
+    color: '#fde047',
+    width: 22,
+    opacity: 0.4,
+    label: 'Textmarker',
+  },
+  pencil: { color: '#374151', width: 2, opacity: 0.7, label: 'Bleistift' },
+};
 
 export type PatternKind =
   | 'none'
@@ -139,6 +168,11 @@ interface State {
   defaultArrowStroke: string;
   defaultArrowStrokeWidth: number;
   defaultFontFamily: string;
+  // pen settings
+  penKind: PenKind;
+  penColor: string;
+  penWidth: number;
+  penOpacity: number;
 
   setTool: (t: Tool) => void;
   setSelected: (ids: string[]) => void;
@@ -178,6 +212,10 @@ export const useStore = create<State>((set) => ({
   defaultArrowStroke: '#111827',
   defaultArrowStrokeWidth: 3,
   defaultFontFamily: 'Inter',
+  penKind: 'pen',
+  penColor: '#111827',
+  penWidth: 4,
+  penOpacity: 1,
 
   setTool: (t) => set({ tool: t, selectedIds: [], editingId: null }),
   setSelected: (ids) => set({ selectedIds: ids }),

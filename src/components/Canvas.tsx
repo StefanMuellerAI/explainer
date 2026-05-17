@@ -24,6 +24,7 @@ import {
   type ArrowEl,
   type FrameEl,
   type TextEl,
+  type PenEl,
   type ShapeType,
 } from '../store';
 import { patternDataUri, loadPatternImage } from '../lib/patterns';
@@ -52,6 +53,7 @@ export function Canvas() {
   const [size, setSize] = useState({ w: 1, h: 1 });
   const [draftShape, setDraftShape] = useState<DraftShape | null>(null);
   const [draftArrow, setDraftArrow] = useState<DraftArrow | null>(null);
+  const [draftStroke, setDraftStroke] = useState<number[] | null>(null);
   const [spaceDown, setSpaceDown] = useState(false);
 
   const {
@@ -75,6 +77,10 @@ export function Canvas() {
     defaultArrowStroke,
     defaultArrowStrokeWidth,
     defaultFontFamily,
+    penKind,
+    penColor,
+    penWidth,
+    penOpacity,
     duplicate,
   } = useStore();
 
@@ -126,6 +132,38 @@ export function Canvas() {
         e.preventDefault();
         if (selectedIds.length) duplicate(selectedIds);
       }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        if (!selectedIds.length) return;
+        e.preventDefault();
+        const els = useStore
+          .getState()
+          .elements.filter((el) => selectedIds.includes(el.id));
+        if (!els.length) return;
+        try {
+          navigator.clipboard.writeText(
+            '__explainer_clip__' + JSON.stringify(els),
+          );
+        } catch {
+          // ignore
+        }
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
+        if (!selectedIds.length) return;
+        e.preventDefault();
+        const els = useStore
+          .getState()
+          .elements.filter((el) => selectedIds.includes(el.id));
+        if (els.length) {
+          try {
+            navigator.clipboard.writeText(
+              '__explainer_clip__' + JSON.stringify(els),
+            );
+          } catch {
+            // ignore
+          }
+          removeElements(selectedIds);
+        }
+      }
       if ((e.ctrlKey || e.metaKey) && e.key === '=') {
         e.preventDefault();
         zoomBy(1.2);
@@ -146,52 +184,123 @@ export function Canvas() {
     };
   }, [selectedIds, removeElements, resetViewport, setSelected, setEditing, setTool, duplicate]);
 
-  // Paste images
+  // Paste images & text
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      for (const item of items) {
-        if (item.type.startsWith('image/')) {
-          const file = item.getAsFile();
-          if (!file) continue;
-          const reader = new FileReader();
-          reader.onload = () => {
-            const src = reader.result as string;
-            const img = new Image();
-            img.onload = () => {
-              const max = 400;
-              const ratio = Math.min(
-                1,
-                max / Math.max(img.width, img.height),
-              );
-              const w = img.width * ratio;
-              const h = img.height * ratio;
-              // center on visible viewport
-              const cx = (size.w / 2 - viewport.x) / viewport.scale;
-              const cy = (size.h / 2 - viewport.y) / viewport.scale;
-              addElement({
+      // Don't hijack pastes into editable inputs
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      const raw0 = e.clipboardData?.getData('text/plain') ?? '';
+      const PREFIX = '__explainer_clip__';
+      // 0) Internal element paste (from Ctrl+C / Ctrl+X within the app)
+      if (raw0.startsWith(PREFIX)) {
+        try {
+          const arr = JSON.parse(raw0.slice(PREFIX.length)) as CanvasEl[];
+          if (Array.isArray(arr) && arr.length) {
+            const newIds: string[] = [];
+            arr.forEach((el) => {
+              const copy = {
+                ...el,
                 id: newId(),
-                type: 'image',
-                x: cx - w / 2,
-                y: cy - h / 2,
-                width: w,
-                height: h,
-                rotation: 0,
-                src,
-                naturalWidth: img.width,
-                naturalHeight: img.height,
-                cropX: 0,
-                cropY: 0,
-                cropWidth: img.width,
-                cropHeight: img.height,
-              } as ImageEl);
-            };
-            img.src = src;
-          };
-          reader.readAsDataURL(file);
+                x: (el.x ?? 0) + 30,
+                y: (el.y ?? 0) + 30,
+              } as CanvasEl;
+              addElement(copy);
+              newIds.push(copy.id);
+            });
+            useStore.getState().setSelected(newIds);
+            return;
+          }
+        } catch {
+          // fall through
         }
       }
+      const items = e.clipboardData?.items;
+      // 1) Image paste
+      if (items) {
+        for (const item of items) {
+          if (item.type.startsWith('image/')) {
+            const file = item.getAsFile();
+            if (!file) continue;
+            const reader = new FileReader();
+            reader.onload = () => {
+              const src = reader.result as string;
+              const img = new Image();
+              img.onload = () => {
+                const max = 400;
+                const ratio = Math.min(
+                  1,
+                  max / Math.max(img.width, img.height),
+                );
+                const w = img.width * ratio;
+                const h = img.height * ratio;
+                const cx = (size.w / 2 - viewport.x) / viewport.scale;
+                const cy = (size.h / 2 - viewport.y) / viewport.scale;
+                addElement({
+                  id: newId(),
+                  type: 'image',
+                  x: cx - w / 2,
+                  y: cy - h / 2,
+                  width: w,
+                  height: h,
+                  rotation: 0,
+                  src,
+                  naturalWidth: img.width,
+                  naturalHeight: img.height,
+                  cropX: 0,
+                  cropY: 0,
+                  cropWidth: img.width,
+                  cropHeight: img.height,
+                } as ImageEl);
+              };
+              img.src = src;
+            };
+            reader.readAsDataURL(file);
+            return;
+          }
+        }
+      }
+      // 2) Text paste
+      const raw = e.clipboardData?.getData('text/plain');
+      if (!raw) return;
+      const text = raw.trim();
+      if (!text) return;
+      const isUrl = /^https?:\/\/[^\s]+$/i.test(text);
+      const finalText = isUrl ? `Quelle: ${text}` : text;
+      const fontFamily = isUrl
+        ? 'JetBrains Mono'
+        : useStore.getState().defaultFontFamily;
+      const fontSize = isUrl ? 18 : 24;
+      const m = measureText(finalText, fontFamily, fontSize, false, false);
+      const cx = (size.w / 2 - viewport.x) / viewport.scale;
+      const cy = (size.h / 2 - viewport.y) / viewport.scale;
+      addElement({
+        id: newId(),
+        type: 'text',
+        x: cx - m.width / 2,
+        y: cy - m.height / 2,
+        width: m.width,
+        height: m.height,
+        rotation: 0,
+        text: finalText,
+        fontFamily,
+        fontSize,
+        bold: false,
+        italic: false,
+        fill: isUrl ? '#374151' : '#111827',
+        align: 'left',
+        effect: 'none',
+        effectColor: '#7c3aed',
+        effectIntensity: 0.5,
+        curveBend: 0.5,
+      } as TextEl);
     };
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
@@ -340,6 +449,11 @@ export function Canvas() {
       setDraftArrow({ start: p, end: p });
       return;
     }
+    if (tool === 'pen') {
+      const p = worldPointer();
+      setDraftStroke([p.x, p.y]);
+      return;
+    }
     if (tool === 'text') {
       const p = worldPointer();
       const id = newId();
@@ -393,6 +507,16 @@ export function Canvas() {
     if (draftArrow) {
       const p = worldPointer();
       setDraftArrow({ ...draftArrow, end: p });
+    }
+    if (draftStroke) {
+      const p = worldPointer();
+      const last = draftStroke.length;
+      const lx = draftStroke[last - 2];
+      const ly = draftStroke[last - 1];
+      // sample at minimum distance to keep arrays small
+      if (Math.hypot(p.x - lx, p.y - ly) >= 1.5) {
+        setDraftStroke([...draftStroke, p.x, p.y]);
+      }
     }
   };
 
@@ -448,6 +572,41 @@ export function Canvas() {
       }
       setDraftShape(null);
       setTool('select');
+    }
+    if (draftStroke) {
+      const pts = draftStroke;
+      if (pts.length >= 4) {
+        let minX = Infinity,
+          minY = Infinity,
+          maxX = -Infinity,
+          maxY = -Infinity;
+        for (let i = 0; i < pts.length; i += 2) {
+          minX = Math.min(minX, pts[i]);
+          maxX = Math.max(maxX, pts[i]);
+          minY = Math.min(minY, pts[i + 1]);
+          maxY = Math.max(maxY, pts[i + 1]);
+        }
+        const local = pts.map((v, i) =>
+          i % 2 === 0 ? v - minX : v - minY,
+        );
+        addElement({
+          id: newId(),
+          type: 'pen',
+          x: minX,
+          y: minY,
+          width: Math.max(1, maxX - minX),
+          height: Math.max(1, maxY - minY),
+          rotation: 0,
+          points: local,
+          stroke: penColor,
+          strokeWidth: penWidth,
+          opacity: penOpacity,
+          penKind,
+          tension: penKind === 'pencil' ? 0 : 0.4,
+        } as PenEl);
+      }
+      setDraftStroke(null);
+      // keep pen tool active so user can keep drawing
     }
     if (draftArrow) {
       const { start, end } = draftArrow;
@@ -576,6 +735,21 @@ export function Canvas() {
               pointerLength={12}
               pointerWidth={12}
               fill={defaultArrowStroke}
+              listening={false}
+            />
+          )}
+          {draftStroke && (
+            <Line
+              points={draftStroke}
+              stroke={penColor}
+              strokeWidth={penWidth}
+              opacity={penOpacity}
+              lineCap={penKind === 'highlighter' ? 'square' : 'round'}
+              lineJoin="round"
+              tension={penKind === 'pencil' ? 0 : 0.4}
+              globalCompositeOperation={
+                penKind === 'highlighter' ? 'multiply' : 'source-over'
+              }
               listening={false}
             />
           )}
@@ -762,6 +936,15 @@ function ElementRenderer({
         patch.width = m.width;
         patch.height = m.height;
       }
+      if (el.type === 'pen') {
+        const p = el as PenEl;
+        const oldW = p.width || 1;
+        const oldH = p.height || 1;
+        const fx = newW / oldW;
+        const fy = newH / oldH;
+        patch.points = p.points.map((v, i) => (i % 2 === 0 ? v * fx : v * fy));
+        patch.strokeWidth = p.strokeWidth * Math.max(fx, fy);
+      }
       updateElement(el.id, patch);
     },
   };
@@ -771,6 +954,9 @@ function ElementRenderer({
   }
   if (el.type === 'arrow') {
     return <ArrowNode el={el} handlers={commonHandlers} selected={selected} />;
+  }
+  if (el.type === 'pen') {
+    return <PenNode el={el} handlers={commonHandlers} />;
   }
   if (el.type === 'frame') {
     return <FrameNode el={el} handlers={commonHandlers} />;
@@ -1201,6 +1387,31 @@ function TextNode({
     >
       {renderEffect()}
     </Group>
+  );
+}
+
+function PenNode({ el, handlers }: { el: PenEl; handlers: any }) {
+  return (
+    <Line
+      id={el.id}
+      x={el.x}
+      y={el.y}
+      width={el.width}
+      height={el.height}
+      rotation={el.rotation}
+      points={el.points}
+      stroke={el.stroke}
+      strokeWidth={el.strokeWidth}
+      opacity={el.opacity}
+      lineCap={el.penKind === 'highlighter' ? 'square' : 'round'}
+      lineJoin="round"
+      tension={el.tension}
+      globalCompositeOperation={
+        el.penKind === 'highlighter' ? 'multiply' : 'source-over'
+      }
+      hitStrokeWidth={Math.max(12, el.strokeWidth + 6)}
+      {...handlers}
+    />
   );
 }
 

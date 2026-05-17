@@ -8,6 +8,7 @@ import {
   Star,
   ArrowRight,
   Type,
+  Pencil,
   Frame,
   ZoomIn,
   ZoomOut,
@@ -31,6 +32,7 @@ const TOOLS: { id: Tool; label: string; icon: any; shortcut?: string }[] = [
   { id: 'star', label: 'Stern', icon: Star, shortcut: 'S' },
   { id: 'arrow', label: 'Pfeil', icon: ArrowRight, shortcut: 'A' },
   { id: 'text', label: 'Text', icon: Type, shortcut: 'X' },
+  { id: 'pen', label: 'Stift', icon: Pencil, shortcut: 'P' },
   { id: 'frame', label: 'Export-Rahmen', icon: Frame, shortcut: 'F' },
 ];
 
