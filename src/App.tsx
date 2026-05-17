@@ -1,29 +1,55 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ChevronRight, ChevronLeft } from 'lucide-react';
 import { Canvas } from './components/Canvas';
 import { Toolbar } from './components/Toolbar';
 import { PropertyPanel } from './components/PropertyPanel';
 import { BackgroundPicker } from './components/BackgroundPicker';
 import { PenSettings } from './components/PenSettings';
+import { CursorSettingsPanel } from './components/CursorSettingsPanel';
+import { CustomCursor } from './components/CustomCursor';
+import { PresetPanel } from './components/PresetPanel';
 import { useStore } from './store';
 
 export default function App() {
   const [bgOpen, setBgOpen] = useState(false);
+  const [cursorOpen, setCursorOpen] = useState(false);
+  const [presetOpen, setPresetOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
   const viewport = useStore((s) => s.viewport);
   const tool = useStore((s) => s.tool);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+
+  const openOne = (which: 'bg' | 'cursor' | 'preset' | null) => {
+    setBgOpen(which === 'bg');
+    setCursorOpen(which === 'cursor');
+    setPresetOpen(which === 'preset');
+  };
 
   return (
     <div className="w-full h-full flex">
       {/* Left toolbar */}
       <div className="p-3 z-10">
-        <Toolbar onToggleBackground={() => setBgOpen((v) => !v)} />
+        <Toolbar
+          onToggleBackground={() =>
+            bgOpen ? openOne(null) : openOne('bg')
+          }
+          onToggleCursor={() =>
+            cursorOpen ? openOne(null) : openOne('cursor')
+          }
+          onTogglePresets={() =>
+            presetOpen ? openOne(null) : openOne('preset')
+          }
+        />
       </div>
 
       {/* Canvas area */}
-      <div className="flex-1 relative">
+      <div ref={canvasContainerRef} className="flex-1 relative">
         <Canvas />
-        {bgOpen && <BackgroundPicker onClose={() => setBgOpen(false)} />}
+        {bgOpen && <BackgroundPicker onClose={() => openOne(null)} />}
+        {cursorOpen && (
+          <CursorSettingsPanel onClose={() => openOne(null)} />
+        )}
+        {presetOpen && <PresetPanel onClose={() => openOne(null)} />}
         {tool === 'pen' && <PenSettings />}
 
         {/* Zoom indicator */}
@@ -47,6 +73,8 @@ export default function App() {
           <PropertyPanel />
         </div>
       )}
+
+      <CustomCursor containerRef={canvasContainerRef} />
     </div>
   );
 }

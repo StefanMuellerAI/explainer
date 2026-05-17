@@ -17,6 +17,8 @@ import {
   Image as ImageIcon,
   Trash2,
   Palette,
+  Sparkles,
+  Settings,
 } from 'lucide-react';
 import { useStore, type Tool } from '../store';
 import { exportFullCanvas, exportFrames } from '../lib/export';
@@ -38,8 +40,12 @@ const TOOLS: { id: Tool; label: string; icon: any; shortcut?: string }[] = [
 
 export function Toolbar({
   onToggleBackground,
+  onToggleCursor,
+  onTogglePresets,
 }: {
   onToggleBackground: () => void;
+  onToggleCursor: () => void;
+  onTogglePresets: () => void;
 }) {
   const {
     tool,
@@ -149,6 +155,22 @@ export function Toolbar({
         className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-700 hover:bg-gray-100"
       >
         <Palette size={18} />
+      </button>
+
+      <button
+        onClick={onToggleCursor}
+        title="Präsentations-Cursor"
+        className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-700 hover:bg-gray-100"
+      >
+        <Sparkles size={18} />
+      </button>
+
+      <button
+        onClick={onTogglePresets}
+        title="Presets / Einstellungen"
+        className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-700 hover:bg-gray-100"
+      >
+        <Settings size={18} />
       </button>
 
       <div className="h-px bg-gray-200 my-1" />

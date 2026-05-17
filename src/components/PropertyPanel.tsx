@@ -263,7 +263,10 @@ function ShapeFields({ el }: { el: ShapeEl }) {
         />
         <Row>
           <select
-            value={el.fontFamily}
+            key={`shape-font-${el.id}`}
+            value={
+              FONT_FAMILIES.includes(el.fontFamily) ? el.fontFamily : 'Inter'
+            }
             onChange={(e) =>
               update(el.id, { fontFamily: e.target.value } as any)
             }
@@ -590,8 +593,14 @@ function TextFields({ el }: { el: TextEl }) {
         />
         <Row>
           <select
-            value={el.fontFamily}
-            onChange={(e) => setField({ fontFamily: e.target.value })}
+            key={`font-${el.id}`}
+            value={
+              FONT_FAMILIES.includes(el.fontFamily) ? el.fontFamily : 'Inter'
+            }
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v && v !== el.fontFamily) setField({ fontFamily: v });
+            }}
             className="flex-1 text-xs border border-gray-300 rounded px-2 py-1"
             style={{ fontFamily: el.fontFamily }}
           >

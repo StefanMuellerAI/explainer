@@ -24,3 +24,8 @@ button {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+.cursor-hidden,
+.cursor-hidden * {
+  cursor: none !important;
+}

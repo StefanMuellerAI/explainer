@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 export type Tool =
   | 'select'
@@ -148,6 +149,16 @@ export interface Background {
   animationSpeed: number; // 0.1 .. 3
 }
 
+export type CursorShape = 'dot' | 'ring' | 'arrow' | 'spotlight';
+
+export interface CursorSettings {
+  enabled: boolean;
+  shape: CursorShape;
+  size: number;
+  color: string;
+  opacity: number;
+}
+
 export interface Viewport {
   x: number;
   y: number;
@@ -159,6 +170,7 @@ interface State {
   selectedIds: string[];
   tool: Tool;
   background: Background;
+  cursor: CursorSettings;
   viewport: Viewport;
   editingId: string | null;
   // default style for new shapes/arrows
@@ -180,6 +192,7 @@ interface State {
   updateElement: (id: string, patch: Partial<CanvasEl>) => void;
   removeElements: (ids: string[]) => void;
   setBackground: (b: Partial<Background>) => void;
+  setCursor: (c: Partial<CursorSettings>) => void;
   setViewport: (v: Partial<Viewport>) => void;
   resetViewport: () => void;
   setEditing: (id: string | null) => void;
@@ -192,7 +205,24 @@ interface State {
 export const newId = () =>
   Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
-export const useStore = create<State>((set) => ({
+export const PRESET_KEYS = [
+  'background',
+  'cursor',
+  'defaultShapeFill',
+  'defaultShapeStroke',
+  'defaultShapeStrokeWidth',
+  'defaultArrowStroke',
+  'defaultArrowStrokeWidth',
+  'defaultFontFamily',
+  'penKind',
+  'penColor',
+  'penWidth',
+  'penOpacity',
+] as const;
+
+export const useStore = create<State>()(
+  persist(
+    (set) => ({
   elements: [],
   selectedIds: [],
   tool: 'select',
@@ -203,6 +233,13 @@ export const useStore = create<State>((set) => ({
     patternSize: 20,
     animation: 'none',
     animationSpeed: 1,
+  },
+  cursor: {
+    enabled: false,
+    shape: 'ring',
+    size: 40,
+    color: '#ef4444',
+    opacity: 0.85,
   },
   viewport: { x: 0, y: 0, scale: 1 },
   editingId: null,
@@ -235,6 +272,7 @@ export const useStore = create<State>((set) => ({
     })),
   setBackground: (b) =>
     set((s) => ({ background: { ...s.background, ...b } })),
+  setCursor: (c) => set((s) => ({ cursor: { ...s.cursor, ...c } })),
   setViewport: (v) => set((s) => ({ viewport: { ...s.viewport, ...v } })),
   resetViewport: () => set({ viewport: { x: 0, y: 0, scale: 1 } }),
   setEditing: (id) => set({ editingId: id }),
@@ -261,7 +299,51 @@ export const useStore = create<State>((set) => ({
         selectedIds: copies.map((c) => c.id),
       };
     }),
-}));
+    }),
+    {
+      name: 'explainer-storage',
+      version: 1,
+      // persist preferences AND canvas elements so refresh doesn't lose work
+      partialize: (state) => ({
+        background: state.background,
+        cursor: state.cursor,
+        defaultShapeFill: state.defaultShapeFill,
+        defaultShapeStroke: state.defaultShapeStroke,
+        defaultShapeStrokeWidth: state.defaultShapeStrokeWidth,
+        defaultArrowStroke: state.defaultArrowStroke,
+        defaultArrowStrokeWidth: state.defaultArrowStrokeWidth,
+        defaultFontFamily: state.defaultFontFamily,
+        penKind: state.penKind,
+        penColor: state.penColor,
+        penWidth: state.penWidth,
+        penOpacity: state.penOpacity,
+        elements: state.elements,
+      }),
+    },
+  ),
+);
+
+export function exportPresetJSON(): string {
+  const s = useStore.getState();
+  const payload: any = {};
+  for (const k of PRESET_KEYS) payload[k] = (s as any)[k];
+  return JSON.stringify({ explainerPreset: 1, ...payload }, null, 2);
+}
+
+export function applyPresetJSON(json: string): boolean {
+  try {
+    const data = JSON.parse(json);
+    if (!data || typeof data !== 'object') return false;
+    const patch: any = {};
+    for (const k of PRESET_KEYS) {
+      if (k in data) patch[k] = data[k];
+    }
+    useStore.setState(patch);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export const FONT_FAMILIES = [
   'Inter',

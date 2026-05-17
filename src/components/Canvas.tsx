@@ -42,6 +42,17 @@ interface DraftArrow {
   start: { x: number; y: number };
   end: { x: number; y: number };
 }
+interface Marquee {
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+  additive: boolean;
+}
+
+// shared between renderers during a multi-element drag
+type DragStartMap = Record<string, { x: number; y: number }> | null;
+const multiDragState: { current: DragStartMap } = { current: null };
+// captured at transformstart so transformend can branch on the dragged anchor
+const activeAnchorRef: { current: string } = { current: '' };
 
 export function Canvas() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -54,6 +65,7 @@ export function Canvas() {
   const [draftShape, setDraftShape] = useState<DraftShape | null>(null);
   const [draftArrow, setDraftArrow] = useState<DraftArrow | null>(null);
   const [draftStroke, setDraftStroke] = useState<number[] | null>(null);
+  const [marquee, setMarquee] = useState<Marquee | null>(null);
   const [spaceDown, setSpaceDown] = useState(false);
 
   const {
@@ -278,7 +290,17 @@ export function Canvas() {
         ? 'JetBrains Mono'
         : useStore.getState().defaultFontFamily;
       const fontSize = isUrl ? 18 : 24;
-      const m = measureText(finalText, fontFamily, fontSize, false, false);
+      const cap = 600;
+      const probe = measureText(finalText, fontFamily, fontSize, false, false);
+      const wrapW = Math.min(cap, probe.width);
+      const m = measureText(
+        finalText,
+        fontFamily,
+        fontSize,
+        false,
+        false,
+        wrapW,
+      );
       const cx = (size.w / 2 - viewport.x) / viewport.scale;
       const cy = (size.h / 2 - viewport.y) / viewport.scale;
       addElement({
@@ -305,6 +327,32 @@ export function Canvas() {
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
   }, [addElement, size, viewport]);
+
+  // Ensure custom fonts are loaded, then redraw so Konva picks them up
+  useEffect(() => {
+    if (typeof document === 'undefined' || !(document as any).fonts) return;
+    const families = new Set<string>();
+    elements.forEach((el) => {
+      if (el.type === 'text') families.add((el as TextEl).fontFamily);
+      if (
+        el.type === 'rect' ||
+        el.type === 'ellipse' ||
+        el.type === 'triangle' ||
+        el.type === 'diamond' ||
+        el.type === 'star'
+      ) {
+        families.add((el as ShapeEl).fontFamily);
+      }
+    });
+    if (families.size === 0) return;
+    Promise.all(
+      Array.from(families).map((f) =>
+        (document as any).fonts.load(`16px "${f}"`).catch(() => null),
+      ),
+    ).then(() => {
+      stageRef.current?.batchDraw();
+    });
+  }, [elements]);
 
   // Background pattern image
   const [patternImg, setPatternImg] = useState<HTMLImageElement | null>(null);
@@ -441,7 +489,9 @@ export function Canvas() {
     const isStage = e.target === e.target.getStage();
     if (spaceDown) return; // dragging is enabled
     if (tool === 'select' && isStage) {
-      setSelected([]);
+      const p = worldPointer();
+      setMarquee({ start: p, end: p, additive: e.evt.shiftKey });
+      if (!e.evt.shiftKey) setSelected([]);
       return;
     }
     if (tool === 'arrow') {
@@ -518,6 +568,10 @@ export function Canvas() {
         setDraftStroke([...draftStroke, p.x, p.y]);
       }
     }
+    if (marquee) {
+      const p = worldPointer();
+      setMarquee({ ...marquee, end: p });
+    }
   };
 
   const onMouseUp = () => {
@@ -572,6 +626,34 @@ export function Canvas() {
       }
       setDraftShape(null);
       setTool('select');
+    }
+    if (marquee) {
+      const m = marquee;
+      setMarquee(null);
+      const x1 = Math.min(m.start.x, m.end.x);
+      const y1 = Math.min(m.start.y, m.end.y);
+      const x2 = Math.max(m.start.x, m.end.x);
+      const y2 = Math.max(m.start.y, m.end.y);
+      if (x2 - x1 < 3 && y2 - y1 < 3) {
+        // single click on empty area – already handled (deselect)
+        return;
+      }
+      const hits = elements
+        .filter((el) => el.type !== 'frame')
+        .filter(
+          (el) =>
+            el.x < x2 &&
+            el.x + el.width > x1 &&
+            el.y < y2 &&
+            el.y + el.height > y1,
+        )
+        .map((el) => el.id);
+      if (m.additive) {
+        const cur = useStore.getState().selectedIds;
+        setSelected(Array.from(new Set([...cur, ...hits])));
+      } else {
+        setSelected(hits);
+      }
     }
     if (draftStroke) {
       const pts = draftStroke;
@@ -738,6 +820,27 @@ export function Canvas() {
               listening={false}
             />
           )}
+          {marquee &&
+            (() => {
+              const x = Math.min(marquee.start.x, marquee.end.x);
+              const y = Math.min(marquee.start.y, marquee.end.y);
+              const w = Math.abs(marquee.end.x - marquee.start.x);
+              const h = Math.abs(marquee.end.y - marquee.start.y);
+              return (
+                <Rect
+                  x={x}
+                  y={y}
+                  width={w}
+                  height={h}
+                  stroke="#2563eb"
+                  strokeWidth={1.5}
+                  strokeScaleEnabled={false}
+                  dash={[6, 4]}
+                  fill="rgba(37,99,235,0.08)"
+                  listening={false}
+                />
+              );
+            })()}
           {draftStroke && (
             <Line
               points={draftStroke}
@@ -893,15 +996,69 @@ function ElementRenderer({
           cur.includes(el.id) ? cur.filter((i) => i !== el.id) : [...cur, el.id],
         );
       } else {
-        setSelected([el.id]);
+        const cur = useStore.getState().selectedIds;
+        // if clicking on already-selected, preserve multi-selection
+        if (!cur.includes(el.id)) setSelected([el.id]);
       }
     },
     onTap: (e: Konva.KonvaEventObject<MouseEvent>) => {
       e.cancelBubble = true;
       setSelected([el.id]);
     },
+    onDragStart: (e: Konva.KonvaEventObject<DragEvent>) => {
+      const cur = useStore.getState().selectedIds;
+      if (cur.length > 1 && cur.includes(el.id)) {
+        const state = useStore.getState();
+        const map: Record<string, { x: number; y: number }> = {};
+        cur.forEach((id) => {
+          const found = state.elements.find((x) => x.id === id);
+          if (found) map[id] = { x: found.x, y: found.y };
+        });
+        multiDragState.current = map;
+      } else {
+        multiDragState.current = null;
+      }
+    },
+    onDragMove: (e: Konva.KonvaEventObject<DragEvent>) => {
+      const start = multiDragState.current;
+      if (!start || !start[el.id]) return;
+      const dx = e.target.x() - start[el.id].x;
+      const dy = e.target.y() - start[el.id].y;
+      const layer = e.target.getLayer();
+      if (!layer) return;
+      for (const id of Object.keys(start)) {
+        if (id === el.id) continue;
+        const node = layer.findOne(`#${id}`);
+        if (node) {
+          node.position({ x: start[id].x + dx, y: start[id].y + dy });
+        }
+      }
+    },
     onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => {
-      updateElement(el.id, { x: e.target.x(), y: e.target.y() });
+      const start = multiDragState.current;
+      if (start) {
+        const dx = e.target.x() - start[el.id].x;
+        const dy = e.target.y() - start[el.id].y;
+        for (const id of Object.keys(start)) {
+          if (id === el.id) {
+            updateElement(id, { x: e.target.x(), y: e.target.y() });
+          } else {
+            updateElement(id, {
+              x: start[id].x + dx,
+              y: start[id].y + dy,
+            });
+          }
+        }
+        multiDragState.current = null;
+      } else {
+        updateElement(el.id, { x: e.target.x(), y: e.target.y() });
+      }
+    },
+    onTransformStart: (e: Konva.KonvaEventObject<Event>) => {
+      const tr = e.target
+        .getStage()
+        ?.findOne('Transformer') as Konva.Transformer | undefined;
+      activeAnchorRef.current = (tr && tr.getActiveAnchor()) || '';
     },
     onTransformEnd: (e: Konva.KonvaEventObject<Event>) => {
       const node = e.target;
@@ -929,12 +1086,38 @@ function ElementRenderer({
       }
       if (el.type === 'text') {
         const t = el as TextEl;
-        const factor = Math.max(sx, sy);
-        const nf = Math.max(6, t.fontSize * factor);
-        const m = measureText(t.text, t.fontFamily, nf, t.bold, t.italic);
-        patch.fontSize = nf;
-        patch.width = m.width;
-        patch.height = m.height;
+        const a = activeAnchorRef.current;
+        const isSide = a === 'middle-left' || a === 'middle-right';
+        if (isSide) {
+          // resize width only -> re-wrap, fontSize stays
+          const newWidth = Math.max(20, t.width * sx);
+          const m = measureText(
+            t.text,
+            t.fontFamily,
+            t.fontSize,
+            t.bold,
+            t.italic,
+            newWidth,
+          );
+          patch.width = newWidth;
+          patch.height = m.height;
+        } else {
+          // corner / proportional -> scale fontSize
+          const factor = Math.max(sx, sy);
+          const nf = Math.max(6, t.fontSize * factor);
+          const newWidth = Math.max(20, t.width * sx);
+          const m = measureText(
+            t.text,
+            t.fontFamily,
+            nf,
+            t.bold,
+            t.italic,
+            newWidth,
+          );
+          patch.fontSize = nf;
+          patch.width = m.width;
+          patch.height = m.height;
+        }
       }
       if (el.type === 'pen') {
         const p = el as PenEl;
@@ -1197,7 +1380,15 @@ function TextNode({
 }) {
   const fontStyle =
     `${el.italic ? 'italic ' : ''}${el.bold ? '700' : 'normal'}`.trim();
-  const m = measureText(el.text, el.fontFamily, el.fontSize, el.bold, el.italic);
+  const wrapWidth = el.width;
+  const m = measureText(
+    el.text,
+    el.fontFamily,
+    el.fontSize,
+    el.bold,
+    el.italic,
+    wrapWidth,
+  );
   const w = m.width;
   const h = m.height;
   const intensity = el.effectIntensity ?? 0.5;
@@ -1211,6 +1402,8 @@ function TextNode({
     fontStyle,
     align: el.align,
     lineHeight: 1.25,
+    width: wrapWidth,
+    wrap: 'word',
   };
 
   const renderEffect = () => {
