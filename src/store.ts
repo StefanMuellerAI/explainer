@@ -1,5 +1,33 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+
+// Persist-safe storage — silently drops writes when localStorage is full
+// or unavailable, so the app keeps working instead of throwing through
+// every state update.
+const safeStorage = {
+  getItem: (name: string): string | null => {
+    try {
+      return localStorage.getItem(name);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (name: string, value: string): void => {
+    try {
+      localStorage.setItem(name, value);
+    } catch (err) {
+      // Quota exceeded, private mode, etc. — log and continue.
+      console.warn('Persist write failed:', err);
+    }
+  },
+  removeItem: (name: string): void => {
+    try {
+      localStorage.removeItem(name);
+    } catch {
+      // ignore
+    }
+  },
+};
 
 export type Tool =
   | 'select'
@@ -303,7 +331,11 @@ export const useStore = create<State>()(
     {
       name: 'explainer-storage',
       version: 1,
-      // persist preferences AND canvas elements so refresh doesn't lose work
+      storage: createJSONStorage(() => safeStorage),
+      // Only persist user preferences. The element list often contains
+      // large base64 image payloads that quickly exhaust the localStorage
+      // quota; persisting it caused QuotaExceededError to propagate out
+      // of dragend handlers and leave Konva stuck mid-drag.
       partialize: (state) => ({
         background: state.background,
         cursor: state.cursor,
@@ -317,7 +349,6 @@ export const useStore = create<State>()(
         penColor: state.penColor,
         penWidth: state.penWidth,
         penOpacity: state.penOpacity,
-        elements: state.elements,
       }),
     },
   ),

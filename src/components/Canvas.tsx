@@ -1015,52 +1015,66 @@ function ElementRenderer({
       setSelected([el.id]);
     },
     onDragStart: (e: Konva.KonvaEventObject<DragEvent>) => {
-      const cur = useStore.getState().selectedIds;
-      if (cur.length > 1 && cur.includes(el.id)) {
-        const state = useStore.getState();
-        const map: Record<string, { x: number; y: number }> = {};
-        cur.forEach((id) => {
-          const found = state.elements.find((x) => x.id === id);
-          if (found) map[id] = { x: found.x, y: found.y };
-        });
-        multiDragState.current = map;
-      } else {
+      try {
+        const cur = useStore.getState().selectedIds;
+        if (cur.length > 1 && cur.includes(el.id)) {
+          const state = useStore.getState();
+          const map: Record<string, { x: number; y: number }> = {};
+          cur.forEach((id) => {
+            const found = state.elements.find((x) => x.id === id);
+            if (found) map[id] = { x: found.x, y: found.y };
+          });
+          multiDragState.current = map;
+        } else {
+          multiDragState.current = null;
+        }
+      } catch (err) {
+        console.error('dragstart failed', err);
         multiDragState.current = null;
       }
     },
     onDragMove: (e: Konva.KonvaEventObject<DragEvent>) => {
-      const start = multiDragState.current;
-      if (!start || !start[el.id]) return;
-      const dx = e.target.x() - start[el.id].x;
-      const dy = e.target.y() - start[el.id].y;
-      const layer = e.target.getLayer();
-      if (!layer) return;
-      for (const id of Object.keys(start)) {
-        if (id === el.id) continue;
-        const node = layer.findOne(`#${id}`);
-        if (node) {
-          node.position({ x: start[id].x + dx, y: start[id].y + dy });
+      try {
+        const start = multiDragState.current;
+        if (!start || !start[el.id]) return;
+        const dx = e.target.x() - start[el.id].x;
+        const dy = e.target.y() - start[el.id].y;
+        const layer = e.target.getLayer();
+        if (!layer) return;
+        for (const id of Object.keys(start)) {
+          if (id === el.id) continue;
+          const node = layer.findOne(`#${id}`);
+          if (node) {
+            node.position({ x: start[id].x + dx, y: start[id].y + dy });
+          }
         }
+      } catch (err) {
+        console.error('dragmove failed', err);
       }
     },
     onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => {
-      const start = multiDragState.current;
-      if (start) {
-        const dx = e.target.x() - start[el.id].x;
-        const dy = e.target.y() - start[el.id].y;
-        for (const id of Object.keys(start)) {
-          if (id === el.id) {
-            updateElement(id, { x: e.target.x(), y: e.target.y() });
-          } else {
-            updateElement(id, {
-              x: start[id].x + dx,
-              y: start[id].y + dy,
-            });
+      try {
+        const start = multiDragState.current;
+        if (start) {
+          const dx = e.target.x() - start[el.id].x;
+          const dy = e.target.y() - start[el.id].y;
+          for (const id of Object.keys(start)) {
+            if (id === el.id) {
+              updateElement(id, { x: e.target.x(), y: e.target.y() });
+            } else {
+              updateElement(id, {
+                x: start[id].x + dx,
+                y: start[id].y + dy,
+              });
+            }
           }
+        } else {
+          updateElement(el.id, { x: e.target.x(), y: e.target.y() });
         }
+      } catch (err) {
+        console.error('dragend failed', err);
+      } finally {
         multiDragState.current = null;
-      } else {
-        updateElement(el.id, { x: e.target.x(), y: e.target.y() });
       }
     },
     onTransformStart: (e: Konva.KonvaEventObject<Event>) => {
