@@ -56,15 +56,6 @@ export default function App() {
         <div className="absolute bottom-3 left-3 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm">
           {Math.round(viewport.scale * 100)}%
         </div>
-
-        {/* Panel toggle */}
-        <button
-          onClick={() => setPanelOpen((v) => !v)}
-          title={panelOpen ? 'Panel ausblenden' : 'Panel einblenden'}
-          className="absolute top-3 right-3 bg-white border border-gray-200 rounded-lg w-8 h-8 flex items-center justify-center text-gray-600 hover:bg-gray-50 shadow-sm z-20"
-        >
-          {panelOpen ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-        </button>
       </div>
 
       {/* Right property panel */}
@@ -73,6 +64,16 @@ export default function App() {
           <PropertyPanel />
         </div>
       )}
+
+      {/* Panel toggle — fixed so it stays reachable in both states */}
+      <button
+        onClick={() => setPanelOpen((v) => !v)}
+        title={panelOpen ? 'Panel ausblenden' : 'Panel einblenden'}
+        className="fixed top-3 z-40 bg-white border border-gray-200 rounded-lg w-8 h-8 flex items-center justify-center text-gray-600 hover:bg-gray-50 shadow-sm"
+        style={{ right: panelOpen ? 320 : 12 }}
+      >
+        {panelOpen ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+      </button>
 
       <CustomCursor containerRef={canvasContainerRef} />
     </div>
