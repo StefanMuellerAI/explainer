@@ -9,6 +9,7 @@ import {
   Arrow,
   Image as KImage,
   Text,
+  TextPath,
   Transformer,
   Group,
 } from 'react-konva';
@@ -22,11 +23,14 @@ import {
   type ImageEl,
   type ArrowEl,
   type FrameEl,
+  type TextEl,
   type ShapeType,
 } from '../store';
 import { patternDataUri, loadPatternImage } from '../lib/patterns';
 import { setStage as setStageRef } from '../lib/stageRef';
+import { measureText } from '../lib/measureText';
 import { TextOverlay } from './TextOverlay';
+import { TextElementOverlay } from './TextElementOverlay';
 
 interface DraftShape {
   type: ShapeType | 'frame';
@@ -336,6 +340,37 @@ export function Canvas() {
       setDraftArrow({ start: p, end: p });
       return;
     }
+    if (tool === 'text') {
+      const p = worldPointer();
+      const id = newId();
+      const fontSize = 48;
+      const text = 'Text';
+      const m = measureText(text, useStore.getState().defaultFontFamily, fontSize, true, false);
+      addElement({
+        id,
+        type: 'text',
+        x: p.x - m.width / 2,
+        y: p.y - m.height / 2,
+        width: m.width,
+        height: m.height,
+        rotation: 0,
+        text,
+        fontFamily: useStore.getState().defaultFontFamily,
+        fontSize,
+        bold: true,
+        italic: false,
+        fill: '#111827',
+        align: 'left',
+        effect: 'none',
+        effectColor: '#7c3aed',
+        effectIntensity: 0.5,
+        curveBend: 0.5,
+      } as TextEl);
+      setTool('select');
+      // enter editing mode right away
+      setTimeout(() => useStore.getState().setEditing(id), 0);
+      return;
+    }
     if (
       tool === 'rect' ||
       tool === 'ellipse' ||
@@ -568,7 +603,23 @@ export function Canvas() {
       {editingId &&
         (() => {
           const el = elements.find((e) => e.id === editingId);
-          if (!el || el.type === 'image' || el.type === 'arrow' || el.type === 'frame')
+          if (!el) return null;
+          if (el.type === 'text') {
+            return (
+              <TextElementOverlay
+                el={el as TextEl}
+                viewport={viewport}
+                onCommit={(text) => {
+                  const t = el as TextEl;
+                  const m = measureText(text, t.fontFamily, t.fontSize, t.bold, t.italic);
+                  updateElement(el.id, { text, width: m.width, height: m.height } as any);
+                  setEditing(null);
+                }}
+                onCancel={() => setEditing(null)}
+              />
+            );
+          }
+          if (el.type === 'image' || el.type === 'arrow' || el.type === 'frame')
             return null;
           return (
             <TextOverlay
@@ -702,6 +753,15 @@ function ElementRenderer({
         const fy = newH / oldH;
         patch.points = a.points.map((v, i) => (i % 2 === 0 ? v * fx : v * fy));
       }
+      if (el.type === 'text') {
+        const t = el as TextEl;
+        const factor = Math.max(sx, sy);
+        const nf = Math.max(6, t.fontSize * factor);
+        const m = measureText(t.text, t.fontFamily, nf, t.bold, t.italic);
+        patch.fontSize = nf;
+        patch.width = m.width;
+        patch.height = m.height;
+      }
       updateElement(el.id, patch);
     },
   };
@@ -714,6 +774,20 @@ function ElementRenderer({
   }
   if (el.type === 'frame') {
     return <FrameNode el={el} handlers={commonHandlers} />;
+  }
+  if (el.type === 'text') {
+    return (
+      <TextNode
+        el={el}
+        handlers={commonHandlers}
+        isEditing={isEditing}
+        onDblClick={() => {
+          setTool('select');
+          setSelected([el.id]);
+          setEditing(el.id);
+        }}
+      />
+    );
   }
   return (
     <ShapeNode
@@ -922,6 +996,212 @@ function curvedPoints(p: number[], curvature: number): number[] {
   const mx = (x1 + x2) / 2 + px * len * curvature * 0.5;
   const my = (y1 + y2) / 2 + py * len * curvature * 0.5;
   return [x1, y1, mx, my, x2, y2];
+}
+
+function TextNode({
+  el,
+  handlers,
+  isEditing,
+  onDblClick,
+}: {
+  el: TextEl;
+  handlers: any;
+  isEditing: boolean;
+  onDblClick: () => void;
+}) {
+  const fontStyle =
+    `${el.italic ? 'italic ' : ''}${el.bold ? '700' : 'normal'}`.trim();
+  const m = measureText(el.text, el.fontFamily, el.fontSize, el.bold, el.italic);
+  const w = m.width;
+  const h = m.height;
+  const intensity = el.effectIntensity ?? 0.5;
+  const blur = 4 + intensity * 36;
+  const offset = 3 + intensity * 12;
+
+  const baseTextProps: any = {
+    text: el.text,
+    fontFamily: el.fontFamily,
+    fontSize: el.fontSize,
+    fontStyle,
+    align: el.align,
+    lineHeight: 1.25,
+  };
+
+  const renderEffect = () => {
+    if (isEditing) {
+      // hide the rendered text while editor is open
+      return null;
+    }
+    switch (el.effect) {
+      case 'drop':
+        return (
+          <Text
+            {...baseTextProps}
+            fill={el.fill}
+            shadowColor={el.effectColor}
+            shadowBlur={blur * 0.5}
+            shadowOffsetX={offset}
+            shadowOffsetY={offset}
+            shadowOpacity={0.55}
+          />
+        );
+      case 'glow':
+        return (
+          <Text
+            {...baseTextProps}
+            fill={el.fill}
+            shadowColor={el.effectColor}
+            shadowBlur={blur}
+            shadowOpacity={0.9}
+          />
+        );
+      case 'echo': {
+        const steps = 3;
+        return (
+          <>
+            {Array.from({ length: steps }).map((_, i) => {
+              const k = steps - i;
+              return (
+                <Text
+                  key={i}
+                  {...baseTextProps}
+                  x={k * offset * 0.6}
+                  y={k * offset * 0.6}
+                  fill={el.effectColor}
+                  opacity={0.25 + i * 0.2}
+                />
+              );
+            })}
+            <Text {...baseTextProps} fill={el.fill} />
+          </>
+        );
+      }
+      case 'outline':
+        return (
+          <Text
+            {...baseTextProps}
+            fill={undefined as any}
+            stroke={el.fill}
+            strokeWidth={Math.max(1, el.fontSize * 0.04)}
+            fillEnabled={false}
+          />
+        );
+      case 'hollow':
+        return (
+          <Text
+            {...baseTextProps}
+            fill={'#ffffff'}
+            stroke={el.fill}
+            strokeWidth={Math.max(1, el.fontSize * 0.05)}
+          />
+        );
+      case 'neon':
+        return (
+          <>
+            <Text
+              {...baseTextProps}
+              fill={el.fill}
+              shadowColor={el.effectColor}
+              shadowBlur={blur * 1.4}
+              shadowOpacity={1}
+            />
+            <Text
+              {...baseTextProps}
+              fill={el.fill}
+              shadowColor={el.effectColor}
+              shadowBlur={blur * 0.7}
+              shadowOpacity={1}
+            />
+            <Text
+              {...baseTextProps}
+              fill={'#ffffff'}
+              stroke={el.fill}
+              strokeWidth={1}
+            />
+          </>
+        );
+      case 'splice':
+        return (
+          <>
+            <Text
+              {...baseTextProps}
+              x={offset}
+              y={offset}
+              fill={el.effectColor}
+            />
+            <Text {...baseTextProps} fill={el.fill} />
+          </>
+        );
+      case 'outlineShadow':
+        return (
+          <Text
+            {...baseTextProps}
+            fill={undefined as any}
+            fillEnabled={false}
+            stroke={el.fill}
+            strokeWidth={Math.max(1, el.fontSize * 0.05)}
+            shadowColor={el.effectColor}
+            shadowBlur={blur * 0.4}
+            shadowOffsetX={offset * 0.6}
+            shadowOffsetY={offset * 0.6}
+            shadowOpacity={0.55}
+          />
+        );
+      case 'background': {
+        const padX = el.fontSize * 0.3;
+        const padY = el.fontSize * 0.15;
+        return (
+          <>
+            <Rect
+              x={-padX}
+              y={-padY}
+              width={w + padX * 2}
+              height={h + padY * 2}
+              fill={el.effectColor}
+              cornerRadius={el.fontSize * 0.2}
+            />
+            <Text {...baseTextProps} fill={el.fill} />
+          </>
+        );
+      }
+      case 'curve': {
+        const bend = el.curveBend ?? 0.5;
+        // Quadratic bezier path. Y baseline near top so text renders fully visible.
+        const baseY = el.fontSize;
+        const ctrlY = baseY - bend * w * 0.4;
+        const d = `M 0 ${baseY} Q ${w / 2} ${ctrlY} ${w} ${baseY}`;
+        return (
+          <TextPath
+            data={d}
+            text={el.text}
+            fontFamily={el.fontFamily}
+            fontSize={el.fontSize}
+            fontStyle={fontStyle}
+            fill={el.fill}
+            align={el.align}
+          />
+        );
+      }
+      default:
+        return <Text {...baseTextProps} fill={el.fill} />;
+    }
+  };
+
+  return (
+    <Group
+      id={el.id}
+      x={el.x}
+      y={el.y}
+      width={w}
+      height={h + (el.effect === 'curve' ? Math.abs(el.curveBend ?? 0.5) * w * 0.4 : 0)}
+      rotation={el.rotation}
+      onDblClick={onDblClick}
+      onDblTap={onDblClick}
+      {...handlers}
+    >
+      {renderEffect()}
+    </Group>
+  );
 }
 
 function FrameNode({ el, handlers }: { el: FrameEl; handlers: any }) {

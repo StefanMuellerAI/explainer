@@ -6,7 +6,11 @@ import {
   type ArrowEl,
   type ImageEl,
   type FrameEl,
+  type TextEl,
+  type TextEffect,
 } from '../store';
+import { measureText } from '../lib/measureText';
+import type { CSSProperties } from 'react';
 import {
   Bold,
   Italic,
@@ -114,6 +118,7 @@ export function PropertyPanel() {
       {el.type === 'arrow' && <ArrowFields el={el as ArrowEl} />}
       {el.type === 'image' && <ImageFields el={el as ImageEl} />}
       {el.type === 'frame' && <FrameFields el={el as FrameEl} />}
+      {el.type === 'text' && <TextFields el={el as TextEl} />}
     </aside>
   );
 }
@@ -128,6 +133,7 @@ function labelFor(t: string) {
     arrow: 'Pfeil',
     image: 'Bild',
     frame: 'Export-Rahmen',
+    text: 'Text',
   }[t] ?? t;
 }
 
@@ -407,6 +413,246 @@ function ImageFields({ el }: { el: ImageEl }) {
       </button>
     </Section>
   );
+}
+
+const EFFECTS: { v: TextEffect; label: string }[] = [
+  { v: 'none', label: 'Keiner' },
+  { v: 'drop', label: 'Drop' },
+  { v: 'glow', label: 'Glanz' },
+  { v: 'echo', label: 'Echo' },
+  { v: 'outline', label: 'Umriss' },
+  { v: 'background', label: 'Hintergrund' },
+  { v: 'outlineShadow', label: 'Kontur+Schatten' },
+  { v: 'hollow', label: 'Hohl' },
+  { v: 'neon', label: 'Neon' },
+  { v: 'splice', label: 'Verzögerung' },
+  { v: 'curve', label: 'Krümmung' },
+];
+
+function effectPreviewStyle(effect: TextEffect, color: string): CSSProperties {
+  const base: CSSProperties = {
+    fontWeight: 700,
+    fontSize: 22,
+    lineHeight: 1,
+    color: '#7c3aed',
+    background: 'transparent',
+    padding: 0,
+  };
+  switch (effect) {
+    case 'drop':
+      return { ...base, textShadow: `3px 3px 0 ${color}55` };
+    case 'glow':
+      return { ...base, textShadow: `0 0 10px ${color}` };
+    case 'echo':
+      return {
+        ...base,
+        textShadow: `2px 2px 0 ${color}80, 4px 4px 0 ${color}50, 6px 6px 0 ${color}30`,
+      };
+    case 'outline':
+      return {
+        ...base,
+        color: 'transparent',
+        WebkitTextStroke: `1.5px #7c3aed`,
+      } as any;
+    case 'background':
+      return {
+        ...base,
+        color: '#7c3aed',
+        background: `${color}55`,
+        padding: '2px 6px',
+        borderRadius: 4,
+      };
+    case 'outlineShadow':
+      return {
+        ...base,
+        color: 'transparent',
+        WebkitTextStroke: `1.5px #7c3aed`,
+        textShadow: `2px 2px 0 ${color}55`,
+      } as any;
+    case 'hollow':
+      return {
+        ...base,
+        color: '#fff',
+        WebkitTextStroke: `1.5px #7c3aed`,
+      } as any;
+    case 'neon':
+      return {
+        ...base,
+        color: '#fff',
+        textShadow: `0 0 6px ${color}, 0 0 14px ${color}, 0 0 22px ${color}`,
+      };
+    case 'splice':
+      return {
+        ...base,
+        textShadow: `4px 4px 0 ${color}`,
+      };
+    case 'curve':
+      return { ...base, fontStyle: 'italic' };
+    default:
+      return base;
+  }
+}
+
+function TextFields({ el }: { el: TextEl }) {
+  const update = useStore((s) => s.updateElement);
+  const setField = (patch: any) => {
+    const merged = { ...el, ...patch } as TextEl;
+    const m = measureText(
+      merged.text,
+      merged.fontFamily,
+      merged.fontSize,
+      merged.bold,
+      merged.italic,
+    );
+    update(el.id, { ...patch, width: m.width, height: m.height } as any);
+  };
+
+  return (
+    <>
+      <Section title="Text">
+        <textarea
+          value={el.text}
+          onChange={(e) => setField({ text: e.target.value })}
+          className="w-full text-sm border border-gray-300 rounded px-2 py-1 mb-2 resize-y min-h-[60px]"
+        />
+        <Row>
+          <select
+            value={el.fontFamily}
+            onChange={(e) => setField({ fontFamily: e.target.value })}
+            className="flex-1 text-xs border border-gray-300 rounded px-2 py-1"
+            style={{ fontFamily: el.fontFamily }}
+          >
+            {FONT_FAMILIES.map((f) => (
+              <option key={f} value={f} style={{ fontFamily: f }}>
+                {f}
+              </option>
+            ))}
+          </select>
+        </Row>
+        <Row>
+          <NumberInput
+            label="Größe"
+            value={el.fontSize}
+            onChange={(v) => setField({ fontSize: Math.max(6, v) })}
+          />
+          <ColorInput
+            label="Farbe"
+            value={el.fill}
+            onChange={(v) => update(el.id, { fill: v } as any)}
+          />
+        </Row>
+        <div className="flex gap-1 mt-2">
+          <ToggleBtn
+            active={el.bold}
+            onClick={() => setField({ bold: !el.bold })}
+            title="Fett"
+          >
+            <BoldIcon />
+          </ToggleBtn>
+          <ToggleBtn
+            active={el.italic}
+            onClick={() => setField({ italic: !el.italic })}
+            title="Kursiv"
+          >
+            <ItalicIcon />
+          </ToggleBtn>
+          <div className="w-px bg-gray-200 mx-1" />
+          <ToggleBtn
+            active={el.align === 'left'}
+            onClick={() => update(el.id, { align: 'left' } as any)}
+          >
+            <AlignLeft size={14} />
+          </ToggleBtn>
+          <ToggleBtn
+            active={el.align === 'center'}
+            onClick={() => update(el.id, { align: 'center' } as any)}
+          >
+            <AlignCenter size={14} />
+          </ToggleBtn>
+          <ToggleBtn
+            active={el.align === 'right'}
+            onClick={() => update(el.id, { align: 'right' } as any)}
+          >
+            <AlignRight size={14} />
+          </ToggleBtn>
+        </div>
+      </Section>
+
+      <Section title="Effekt">
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          {EFFECTS.map((e) => (
+            <button
+              key={e.v}
+              onClick={() => update(el.id, { effect: e.v } as any)}
+              className={`flex flex-col items-center justify-center rounded-lg border bg-white px-1 py-2 text-[10px] text-gray-700 hover:border-blue-300 ${
+                el.effect === e.v ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200'
+              }`}
+              title={e.label}
+            >
+              <span
+                style={effectPreviewStyle(e.v, el.effectColor)}
+                className="block mb-1 select-none"
+              >
+                Ag
+              </span>
+              <span className="truncate w-full text-center">{e.label}</span>
+            </button>
+          ))}
+        </div>
+        {el.effect !== 'none' && el.effect !== 'curve' && (
+          <>
+            <Row>
+              <ColorInput
+                label="Effekt-Farbe"
+                value={el.effectColor}
+                onChange={(v) => update(el.id, { effectColor: v } as any)}
+              />
+            </Row>
+            <label className="text-[10px] text-gray-500 block mb-0.5">
+              Intensität: {Math.round((el.effectIntensity ?? 0.5) * 100)}%
+            </label>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={el.effectIntensity ?? 0.5}
+              onChange={(e) =>
+                update(el.id, { effectIntensity: Number(e.target.value) } as any)
+              }
+              className="w-full"
+            />
+          </>
+        )}
+        {el.effect === 'curve' && (
+          <>
+            <label className="text-[10px] text-gray-500 block mb-0.5">
+              Krümmung: {((el.curveBend ?? 0.5) * 100).toFixed(0)}%
+            </label>
+            <input
+              type="range"
+              min={-1}
+              max={1}
+              step={0.05}
+              value={el.curveBend ?? 0.5}
+              onChange={(e) =>
+                update(el.id, { curveBend: Number(e.target.value) } as any)
+              }
+              className="w-full"
+            />
+          </>
+        )}
+      </Section>
+    </>
+  );
+}
+
+// tiny local icons to avoid extra imports inside TextFields
+function BoldIcon() {
+  return <Bold size={14} />;
+}
+function ItalicIcon() {
+  return <Italic size={14} />;
 }
 
 function FrameFields({ el }: { el: FrameEl }) {

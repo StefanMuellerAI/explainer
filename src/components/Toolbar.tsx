@@ -7,6 +7,7 @@ import {
   Diamond,
   Star,
   ArrowRight,
+  Type,
   Frame,
   ZoomIn,
   ZoomOut,
@@ -29,6 +30,7 @@ const TOOLS: { id: Tool; label: string; icon: any; shortcut?: string }[] = [
   { id: 'diamond', label: 'Raute', icon: Diamond, shortcut: 'D' },
   { id: 'star', label: 'Stern', icon: Star, shortcut: 'S' },
   { id: 'arrow', label: 'Pfeil', icon: ArrowRight, shortcut: 'A' },
+  { id: 'text', label: 'Text', icon: Type, shortcut: 'X' },
   { id: 'frame', label: 'Export-Rahmen', icon: Frame, shortcut: 'F' },
 ];
 

@@ -9,9 +9,23 @@ export type Tool =
   | 'diamond'
   | 'star'
   | 'arrow'
+  | 'text'
   | 'frame';
 
 export type ShapeType = 'rect' | 'ellipse' | 'triangle' | 'diamond' | 'star';
+
+export type TextEffect =
+  | 'none'
+  | 'drop'
+  | 'glow'
+  | 'echo'
+  | 'outline'
+  | 'background'
+  | 'outlineShadow'
+  | 'hollow'
+  | 'neon'
+  | 'splice'
+  | 'curve';
 
 export interface BaseEl {
   id: string;
@@ -69,7 +83,22 @@ export interface FrameEl extends BaseEl {
   name: string;
 }
 
-export type CanvasEl = ShapeEl | ImageEl | ArrowEl | FrameEl;
+export interface TextEl extends BaseEl {
+  type: 'text';
+  text: string;
+  fontFamily: string;
+  fontSize: number;
+  bold: boolean;
+  italic: boolean;
+  fill: string;
+  align: 'left' | 'center' | 'right';
+  effect: TextEffect;
+  effectColor: string;
+  effectIntensity: number; // 0 .. 1, controls blur/offset magnitude
+  curveBend: number; // -1 .. 1, only used for curve effect
+}
+
+export type CanvasEl = ShapeEl | ImageEl | ArrowEl | FrameEl | TextEl;
 
 export type PatternKind =
   | 'none'
