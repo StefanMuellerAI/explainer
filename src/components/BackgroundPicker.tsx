@@ -1,4 +1,4 @@
-import { useStore, type Background } from '../store';
+import { useStore, type Background, type AnimationKind } from '../store';
 import { X } from 'lucide-react';
 
 const PATTERNS: Background['pattern'][] = [
@@ -8,6 +8,14 @@ const PATTERNS: Background['pattern'][] = [
   'lines',
   'cross',
   'diagonal',
+];
+
+const ANIMATIONS: { v: AnimationKind; label: string }[] = [
+  { v: 'none', label: 'Statisch' },
+  { v: 'drift', label: 'Treiben' },
+  { v: 'wave', label: 'Welle' },
+  { v: 'shimmer', label: 'Fließen' },
+  { v: 'pulse', label: 'Pulsieren' },
 ];
 
 const PRESET_COLORS = [
@@ -115,8 +123,43 @@ export function BackgroundPicker({ onClose }: { onClose: () => void }) {
             onChange={(e) =>
               setBackground({ patternSize: Number(e.target.value) })
             }
-            className="w-full"
+            className="w-full mb-3"
           />
+
+          <div className="text-xs text-gray-500 mb-1">Animation</div>
+          <div className="grid grid-cols-3 gap-1 mb-2">
+            {ANIMATIONS.map((a) => (
+              <button
+                key={a.v}
+                onClick={() => setBackground({ animation: a.v })}
+                className={`text-xs py-1.5 rounded border ${
+                  background.animation === a.v
+                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {a.label}
+              </button>
+            ))}
+          </div>
+          {background.animation !== 'none' && (
+            <>
+              <label className="text-xs text-gray-500 block mb-1">
+                Geschwindigkeit: {background.animationSpeed.toFixed(1)}×
+              </label>
+              <input
+                type="range"
+                min={0.1}
+                max={3}
+                step={0.1}
+                value={background.animationSpeed}
+                onChange={(e) =>
+                  setBackground({ animationSpeed: Number(e.target.value) })
+                }
+                className="w-full"
+              />
+            </>
+          )}
         </>
       )}
     </div>

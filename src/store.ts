@@ -60,6 +60,8 @@ export interface ArrowEl extends BaseEl {
   endHead: boolean;
   pointerLength: number;
   pointerWidth: number;
+  curved: boolean;
+  curvature: number; // -1 .. 1 (sign = side, magnitude = how much it bulges)
 }
 
 export interface FrameEl extends BaseEl {
@@ -69,11 +71,23 @@ export interface FrameEl extends BaseEl {
 
 export type CanvasEl = ShapeEl | ImageEl | ArrowEl | FrameEl;
 
+export type PatternKind =
+  | 'none'
+  | 'dots'
+  | 'grid'
+  | 'lines'
+  | 'cross'
+  | 'diagonal';
+
+export type AnimationKind = 'none' | 'drift' | 'wave' | 'pulse' | 'shimmer';
+
 export interface Background {
   color: string;
-  pattern: 'none' | 'dots' | 'grid' | 'lines' | 'cross' | 'diagonal';
+  pattern: PatternKind;
   patternColor: string;
   patternSize: number;
+  animation: AnimationKind;
+  animationSpeed: number; // 0.1 .. 3
 }
 
 export interface Viewport {
@@ -124,6 +138,8 @@ export const useStore = create<State>((set) => ({
     pattern: 'dots',
     patternColor: '#d1d5db',
     patternSize: 20,
+    animation: 'none',
+    animationSpeed: 1,
   },
   viewport: { x: 0, y: 0, scale: 1 },
   editingId: null,

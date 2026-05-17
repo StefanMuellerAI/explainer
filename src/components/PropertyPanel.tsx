@@ -315,6 +315,32 @@ function ArrowFields({ el }: { el: ArrowEl }) {
           }
         />
       </Row>
+      <label className="flex items-center gap-2 mt-2 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={!!el.curved}
+          onChange={(e) => update(el.id, { curved: e.target.checked } as any)}
+        />
+        <span className="text-xs text-gray-700">Geschwungen</span>
+      </label>
+      {el.curved && (
+        <div className="mt-1">
+          <label className="text-[10px] text-gray-500 block mb-0.5">
+            Krümmung: {(el.curvature ?? 0.3).toFixed(2)}
+          </label>
+          <input
+            type="range"
+            min={-1.5}
+            max={1.5}
+            step={0.05}
+            value={el.curvature ?? 0.3}
+            onChange={(e) =>
+              update(el.id, { curvature: Number(e.target.value) } as any)
+            }
+            className="w-full"
+          />
+        </div>
+      )}
     </Section>
   );
 }

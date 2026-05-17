@@ -43,6 +43,8 @@ export function Canvas() {
   const stageRef = useRef<Konva.Stage | null>(null);
   const trRef = useRef<Konva.Transformer | null>(null);
   const layerRef = useRef<Konva.Layer | null>(null);
+  const bgLayerRef = useRef<Konva.Layer | null>(null);
+  const patternRectRef = useRef<Konva.Rect | null>(null);
   const [size, setSize] = useState({ w: 1, h: 1 });
   const [draftShape, setDraftShape] = useState<DraftShape | null>(null);
   const [draftArrow, setDraftArrow] = useState<DraftArrow | null>(null);
@@ -206,7 +208,59 @@ export function Canvas() {
     return () => {
       cancelled = true;
     };
-  }, [background]);
+  }, [background.pattern, background.patternColor, background.patternSize]);
+
+  // Animated background
+  useEffect(() => {
+    const node = patternRectRef.current;
+    const layer = bgLayerRef.current;
+    if (!node || !layer) return;
+    // reset
+    node.fillPatternOffset({ x: 0, y: 0 });
+    node.opacity(1);
+    if (background.animation === 'none' || !patternImg) {
+      layer.batchDraw();
+      return;
+    }
+    const speed = background.animationSpeed;
+    const size = background.patternSize;
+    const anim = new Konva.Animation((frame) => {
+      if (!frame) return;
+      const t = (frame.time / 1000) * speed;
+      switch (background.animation) {
+        case 'drift':
+          node.fillPatternOffset({
+            x: Math.cos(t * 0.6) * size,
+            y: Math.sin(t * 0.6) * size,
+          });
+          break;
+        case 'wave':
+          node.fillPatternOffset({
+            x: Math.sin(t * 1.2) * size * 1.5,
+            y: 0,
+          });
+          break;
+        case 'pulse':
+          node.opacity(0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * 1.8)));
+          break;
+        case 'shimmer':
+          node.fillPatternOffset({ x: -t * size * 0.8, y: -t * size * 0.4 });
+          break;
+      }
+    }, layer);
+    anim.start();
+    return () => {
+      anim.stop();
+      node.fillPatternOffset({ x: 0, y: 0 });
+      node.opacity(1);
+      layer.batchDraw();
+    };
+  }, [
+    background.animation,
+    background.animationSpeed,
+    background.patternSize,
+    patternImg,
+  ]);
 
   // Attach transformer to selected nodes
   useEffect(() => {
@@ -387,6 +441,8 @@ export function Canvas() {
           endHead: true,
           pointerLength: 12,
           pointerWidth: 12,
+          curved: false,
+          curvature: 0.3,
         } as ArrowEl);
       }
       setDraftArrow(null);
@@ -436,16 +492,26 @@ export function Canvas() {
         onTouchEnd={onMouseUp as any}
       >
         {/* Background */}
-        <Layer listening={false}>
+        <Layer ref={bgLayerRef} listening={false}>
           <Rect
             x={bgRect.x}
             y={bgRect.y}
             width={bgRect.width}
             height={bgRect.height}
             fill={background.color}
-            fillPatternImage={patternImg ?? undefined}
-            fillPatternRepeat="repeat"
           />
+          {patternImg && (
+            <Rect
+              ref={patternRectRef}
+              x={bgRect.x}
+              y={bgRect.y}
+              width={bgRect.width}
+              height={bgRect.height}
+              fillPatternImage={patternImg}
+              fillPatternRepeat="repeat"
+              fillPriority="pattern"
+            />
+          )}
         </Layer>
 
         {/* Content */}
@@ -814,18 +880,22 @@ function ImageNode({ el, handlers }: { el: ImageEl; handlers: any }) {
 function ArrowNode({
   el,
   handlers,
-  selected,
 }: {
   el: ArrowEl;
   handlers: any;
   selected: boolean;
 }) {
+  const pts =
+    el.curved && el.points.length >= 4
+      ? curvedPoints(el.points, el.curvature ?? 0.3)
+      : el.points;
   return (
     <Arrow
       id={el.id}
       x={el.x}
       y={el.y}
-      points={el.points}
+      points={pts}
+      tension={el.curved ? 0.5 : 0}
       rotation={el.rotation}
       stroke={el.stroke}
       strokeWidth={el.strokeWidth}
@@ -839,6 +909,19 @@ function ArrowNode({
       {...handlers}
     />
   );
+}
+
+function curvedPoints(p: number[], curvature: number): number[] {
+  const [x1, y1, x2, y2] = p;
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.hypot(dx, dy) || 1;
+  // perpendicular unit vector
+  const px = -dy / len;
+  const py = dx / len;
+  const mx = (x1 + x2) / 2 + px * len * curvature * 0.5;
+  const my = (y1 + y2) / 2 + py * len * curvature * 0.5;
+  return [x1, y1, mx, my, x2, y2];
 }
 
 function FrameNode({ el, handlers }: { el: FrameEl; handlers: any }) {
